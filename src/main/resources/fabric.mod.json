@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "id": "opp_v1",
+  "version": "${version}",
+  "name": "OfflinePlayPackage",
+  "description": "A all-in-one mod to play minecraft with your friends offline! (Given that they are next to you)",
+  "authors": [
+    "wolfjta"
+  ],
+  "contact": {
+    "homepage": "https://offlineplaypackage.vanity.qzz.io/"
+  },
+  "license": "GPL-3.0",
+  "icon": "assets/opp_v1/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "fabric-datagen": [
+      "com.jordan.mods.opp.client.oppDataGenerator"
+    ],
+    "client": [
+      "com.jordan.mods.opp.client.oppClient"
+    ],
+    "main": [
+      "com.jordan.mods.opp.opp"
+    ],
+    "modmenu": [
+      "com.jordan.mods.opp.client.OppModMenuIntegration"
+    ]
+  },
+  "mixins": [
+    "opp_v1.mixins.json",
+    {
+      "config": "opp_v1.client.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric-api": "*",
+    "minecraft": "${minecraft_version}"
+  }
+}

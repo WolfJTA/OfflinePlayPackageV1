@@ -1,0 +1,16 @@
+{
+  "required": true,
+  "package": "com.jordan.mods.opp.mixin.client",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "IntegratedServerMixin",
+    "MinecraftServerAccessor",
+    "TitleScreenMixin",
+    "OpenToLanScreenMixin",
+    "OpenToLanScreenAccessor"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "refmap": "opp_v1.client.refmap.json"
+}
