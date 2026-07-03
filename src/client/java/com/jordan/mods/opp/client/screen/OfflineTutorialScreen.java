@@ -70,6 +70,10 @@ public class OfflineTutorialScreen extends Screen {
         return Text.literal("Windows and macOS block incoming connections on networks marked \"Public\" by default, for security. Marking your hotspot as Private/Trusted allows other devices on it to reach your Minecraft server.");
     }
 
+    private static Text opp$offlineSkinTooltip() {
+        return Text.literal("Set a custom skin PNG to use while playing offline. Everyone else connected to your LAN world, modded or vanilla, will see it too.");
+    }
+
     @Override
     protected void init() {
         super.init();
@@ -96,6 +100,16 @@ public class OfflineTutorialScreen extends Screen {
         this.addDrawableChild(
                 ButtonWidget.builder(Text.literal("Done"), button -> this.close())
                         .dimensions(doneX, doneY, doneWidth, 20)
+                        .build()
+        );
+
+        // Shortcut to the offline skin screen, tucked in the far-left corner
+        // so it doesn't compete with the centered tutorial flow. The tooltip
+        // doubles as a mini-tutorial for what the button actually does.
+        this.addDrawableChild(
+                ButtonWidget.builder(Text.literal("Offline Skin"), button -> this.client.setScreen(new OppSkinScreen(this)))
+                        .dimensions(10, doneY, 100, 20)
+                        .tooltip(Tooltip.of(opp$offlineSkinTooltip()))
                         .build()
         );
 
