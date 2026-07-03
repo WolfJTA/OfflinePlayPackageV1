@@ -9,7 +9,7 @@ import net.minecraft.util.Uuids;
 
 import java.util.UUID;
 
-public record SkinSyncPayload(UUID playerId, byte[] skinPng) implements CustomPayload {
+public record SkinSyncPayload(UUID playerId, byte[] skinPng, boolean slim) implements CustomPayload {
     public static final CustomPayload.Id<SkinSyncPayload> ID =
             new CustomPayload.Id<>(Identifier.of("opp", "skin_sync"));
 
@@ -17,6 +17,7 @@ public record SkinSyncPayload(UUID playerId, byte[] skinPng) implements CustomPa
             PacketCodec.tuple(
                     Uuids.PACKET_CODEC, SkinSyncPayload::playerId,
                     PacketCodecs.byteArray(1 << 20), SkinSyncPayload::skinPng,
+                    PacketCodecs.BOOLEAN, SkinSyncPayload::slim,
                     SkinSyncPayload::new
             );
 

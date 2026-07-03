@@ -14,30 +14,67 @@ public class opp implements ModInitializer {
     @Override
     public void onInitialize() {
         PayloadTypeRegistry.playC2S().register(SkinUploadPayload.ID, SkinUploadPayload.CODEC);
+        // SkinSyncPayload flows server -> client, so it belongs on the S2C
+        // registry rather than C2S. This is registered here (in the common
+        // ModInitializer, which runs on both the client and the server)
+        // rather than in oppClient, since both sides need the codec
+        // registered - the server to send it, the client to receive it.
         PayloadTypeRegistry.playS2C().register(SkinSyncPayload.ID, SkinSyncPayload.CODEC);
 
-        ServerLifecycleEvents.SERVER_STARTED.register(ServerSkinManager::init);
-        ServerLifecycleEvents.SERVER_STOPPED.register(server -> ServerSkinManager.clear());
+        ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+            ServerSkinManager.init(server);
+            OppSkinHttpServer.start(server);
+        });
+        ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
+            ServerSkinManager.clear();
+            OppSkinHttpServer.stop();
+        });
 
-        // Client uploads their skin -> store it, then tell everyone else about it
+        // Client uploads their skin -> validate it, store it, inject it into
+        // their GameProfile as a texture URL. Works for vanilla clients too,
+        // since it's the game's own skin pipeline doing the rendering, not a
+        // custom packet. Note: the GameProfile injection only takes effect for
+        // clients that connect (or reconnect) after this runs - see
+        // OppTextureInjector's class comment. To cover already-connected
+        // opp-aware clients too, we also broadcast a SkinSyncPayload to every
+        // online player so AbstractClientPlayerEntityMixin can pick it up
+        // immediately without needing a rejoin.
         ServerPlayNetworking.registerGlobalReceiver(SkinUploadPayload.ID, (payload, context) ->
                 context.server().execute(() -> {
                     ServerPlayerEntity player = context.player();
-                    ServerSkinManager.storeSkin(player.getUuid(), payload.skinPng());
+                    boolean accepted = ServerSkinManager.storeSkin(player.getUuid(), payload.skinPng(), payload.slim());
+                    if (!accepted) {
+                        return; // malformed/invalid PNG - drop it silently
+                    }
+                    OppTextureInjector.apply(player, payload.slim());
 
-                    SkinSyncPayload sync = new SkinSyncPayload(player.getUuid(), payload.skinPng());
+                    SkinSyncPayload sync = new SkinSyncPayload(player.getUuid(), payload.skinPng(), payload.slim());
                     for (ServerPlayerEntity other : context.server().getPlayerManager().getPlayerList()) {
-                        ServerPlayNetworking.send(other, sync);
+                        if (ServerPlayNetworking.canSend(other, SkinSyncPayload.ID)) {
+                            ServerPlayNetworking.send(other, sync);
+                        }
                     }
                 })
         );
 
-        // New join -> backfill every already-known skin (covers players who joined earlier)
+        // New join -> if they already have a stored skin from a previous
+        // session, inject it into their GameProfile right away so everyone
+        // sees it correctly. We also need to actively push every already-known
+        // skin to the joining player via SkinSyncPayload: those other players
+        // uploaded their skin when *they* joined, so this new client never saw
+        // that upload packet and would otherwise have an empty
+        // OppRemoteSkinCache for all of them until they individually rejoin.
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
             ServerPlayerEntity joining = handler.player;
-            ServerSkinManager.forEachSkin((uuid, bytes) ->
-                    ServerPlayNetworking.send(joining, new SkinSyncPayload(uuid, bytes))
-            );
+            if (ServerSkinManager.hasSkin(joining.getUuid())) {
+                OppTextureInjector.apply(joining, ServerSkinManager.isSlim(joining.getUuid()));
+            }
+
+            ServerSkinManager.forEachSkin((uuid, png, slim) -> {
+                if (ServerPlayNetworking.canSend(joining, SkinSyncPayload.ID)) {
+                    sender.sendPacket(new SkinSyncPayload(uuid, png, slim));
+                }
+            });
         });
     }
 }

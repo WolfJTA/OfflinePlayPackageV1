@@ -6,20 +6,24 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
  * Stores the player's chosen offline skin locally (a raw 64x64 or 64x32
  * skin PNG) and persists it to disk so it's remembered between sessions.
- * Networking/rendering hooks (Stage 2/3) will read from getSkinBytes().
+ * Also tracks the arm/model type (slim "Alex" vs classic "Steve") since
+ * that isn't something we can reliably detect from the PNG itself.
  */
 public final class OppSkinManager {
 
     private static final Path CONFIG_DIR = FabricLoader.getInstance().getConfigDir().resolve("opp_v1");
     private static final Path SKIN_FILE = CONFIG_DIR.resolve("offline_skin.png");
+    private static final Path MODEL_FILE = CONFIG_DIR.resolve("offline_skin_model.txt");
 
     private static byte[] skinBytes = null;
+    private static boolean slimModel = false;
 
     private OppSkinManager() {
     }
@@ -32,6 +36,15 @@ public final class OppSkinManager {
         } catch (IOException e) {
             skinBytes = null;
         }
+
+        try {
+            if (Files.exists(MODEL_FILE)) {
+                String content = Files.readString(MODEL_FILE, StandardCharsets.UTF_8).trim();
+                slimModel = "slim".equalsIgnoreCase(content);
+            }
+        } catch (IOException e) {
+            slimModel = false;
+        }
     }
 
     public static boolean hasCustomSkin() {
@@ -40,6 +53,24 @@ public final class OppSkinManager {
 
     public static byte[] getSkinBytes() {
         return skinBytes;
+    }
+
+    public static boolean isSlimModel() {
+        return slimModel;
+    }
+
+    /**
+     * Sets the arm/model type for the current skin and persists it. Safe to
+     * call regardless of whether a skin is currently loaded - it'll simply
+     * apply to whatever skin gets loaded/uploaded next.
+     */
+    public static void setSlimModel(boolean slim) {
+        slimModel = slim;
+        try {
+            Files.createDirectories(CONFIG_DIR);
+            Files.writeString(MODEL_FILE, slim ? "slim" : "classic", StandardCharsets.UTF_8);
+        } catch (IOException ignored) {
+        }
     }
 
     /**
@@ -98,8 +129,10 @@ public final class OppSkinManager {
 
     public static void clearSkin() {
         skinBytes = null;
+        slimModel = false;
         try {
             Files.deleteIfExists(SKIN_FILE);
+            Files.deleteIfExists(MODEL_FILE);
         } catch (IOException ignored) {
         }
     }
