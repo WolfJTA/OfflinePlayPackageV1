@@ -1,6 +1,7 @@
 package com.jordan.mods.opp.client.screen;
 
 import net.minecraft.client.util.DefaultSkinHelper;
+import com.jordan.mods.opp.client.OppPresetCapes;
 import com.jordan.mods.opp.client.OppPresetSkins;
 import com.jordan.mods.opp.client.OppSkinHistory;
 import com.jordan.mods.opp.client.OppSkinManager;
@@ -29,23 +30,30 @@ import java.util.Set;
 import java.util.function.Supplier;
 
 /**
- * The wardrobe: a two-pane skin browser. The left side shows a big
+ * The wardrobe: a two-pane skin/cape browser. The left side shows a big
  * click-and-drag 3D preview of whatever's currently equipped (same
  * PlayerSkinWidget/SkinTextures pattern as OppSkinScreen). The right side
- * is a scrollable card list of every skin available to wear, grouped
- * top-to-bottom as:
+ * is a scrollable card list, toggled between two modes via the "Your
+ * Skins" / "Your Cape" tab buttons at the top of that pane:
  *
- *   1. "Your Skins"          - every skin you've ever loaded through the
- *                               Custom Skin/Cape Editor's file browser,
- *                               newest first (see OppSkinHistory).
- *   2. "Preloaded Skins"     - the bundled non-vanilla presets.
- *   3. "Mojang Default Skins"- the nine vanilla Steve/Alex-family skins,
- *                               bundled the same way as the other presets.
+ *   SKINS mode, grouped top-to-bottom as:
+ *     1. "Your Skins"          - every skin you've ever loaded through the
+ *                                 Custom Skin/Cape Editor's file browser,
+ *                                 newest first (see OppSkinHistory).
+ *     2. "Preloaded Skins"     - the bundled non-vanilla presets.
+ *     3. "Mojang Default Skins"- the nine vanilla Steve/Alex-family skins,
+ *                                 bundled the same way as the other presets.
  *
- * Clicking any card applies that skin immediately, the same one-click
+ *   CAPES mode, grouped top-to-bottom as:
+ *     1. "Your Cape"           - the custom cape currently loaded via the
+ *                                 Custom Skin/Cape Editor, if any.
+ *     2. "Preloaded Capes"     - bundled preset capes (see OppPresetCapes).
+ *
+ * Clicking any card applies that skin/cape immediately, the same one-click
  * behavior the old preset grid had. Each card carries its own small
- * PlayerSkinWidget as a thumbnail so you can actually see the skin before
- * picking it, rather than just reading a name off a button.
+ * PlayerSkinWidget as a thumbnail so you can actually see it before
+ * picking it, rather than just reading a name off a button - cape cards
+ * show that cape worn on a neutral body so the cape itself stands out.
  *
  * The list itself isn't a vanilla EntryListWidget/ElementListWidget - it's
  * a hand-rolled scroll area (manual scroll offset + enableScissor, mouse
@@ -60,6 +68,9 @@ public class WardrobeScreen extends Screen {
     private static final Identifier PREVIEW_ASSET_ID = Identifier.of("opp", "wardrobe_skin_preview");
     private static final Identifier PREVIEW_CAPE_ASSET_ID = Identifier.of("opp", "wardrobe_cape_preview");
 
+    /** Neutral body every cape-card thumbnail wears, so the cape itself is what stands out. */
+    private static final Identifier CAPE_THUMB_BODY_ASSET_ID = Identifier.of("opp", "wardrobe_cape_thumb_body");
+
     /** Preset ids that are Mojang's own vanilla default skins, split into their own section rather than "Preloaded". */
     private static final Set<String> MOJANG_DEFAULT_IDS = Set.of(
             "steve", "alex", "sunny", "kai", "makena", "noor", "ari", "zuri", "efe"
@@ -72,11 +83,16 @@ public class WardrobeScreen extends Screen {
     private static final int NOTE_HEIGHT = 26;
     private static final int ROW_GAP = 4;
 
+    /** Which half of the right pane is showing - toggled by the "Your Skins" / "Your Cape" tab buttons. */
+    private enum Mode {SKINS, CAPES}
+
     private final Screen parent;
 
+    private Mode mode = Mode.SKINS;
     private String statusMessage = "";
     private boolean statusIsError = false;
     private SkinTextures previewSkinTextures;
+    private boolean capeThumbBodyRegistered = false;
 
     private final List<Row> rows = new ArrayList<>();
     private final Map<String, PlayerSkinWidget> cardWidgets = new HashMap<>();
@@ -180,15 +196,44 @@ public class WardrobeScreen extends Screen {
                         .build()
         );
 
-        // --- Right pane: scrollable card list ---
+        // --- Right pane: mode tabs + scrollable card list ---
         this.listLeft = 10 + leftPaneWidth + 16;
         this.listRight = this.width - 10;
-        this.listTop = 40;
-        this.listBottom = capeRowY - 10;
         this.listContentRight = this.listRight - 8;
 
-        this.opp$buildRows();
+        int tabY = 34;
+        int tabHeight = 20;
+        int tabGap = 4;
+        int tabWidth = (this.listRight - this.listLeft - tabGap) / 2;
 
+        this.addDrawableChild(
+                ButtonWidget.builder(Text.literal("Your Skins"), button -> this.opp$setMode(Mode.SKINS))
+                        .dimensions(this.listLeft, tabY, tabWidth, tabHeight).build()
+        );
+        this.addDrawableChild(
+                ButtonWidget.builder(Text.literal("Your Cape"), button -> this.opp$setMode(Mode.CAPES))
+                        .dimensions(this.listLeft + tabWidth + tabGap, tabY, tabWidth, tabHeight).build()
+        );
+
+        this.listTop = tabY + tabHeight + 6;
+        this.listBottom = capeRowY - 10;
+
+        this.opp$buildRows();
+        this.opp$recomputeMaxScroll();
+    }
+
+    /** Switches the right pane between the skins list and the capes list, rebuilding rows/scroll state. */
+    private void opp$setMode(Mode newMode) {
+        if (this.mode == newMode) {
+            return;
+        }
+        this.mode = newMode;
+        this.scrollOffset = 0;
+        this.opp$buildRows();
+        this.opp$recomputeMaxScroll();
+    }
+
+    private void opp$recomputeMaxScroll() {
         int contentHeight = 0;
         for (Row row : this.rows) {
             contentHeight += row.height() + ROW_GAP;
@@ -196,8 +241,19 @@ public class WardrobeScreen extends Screen {
         this.maxScroll = Math.max(0, contentHeight - (this.listBottom - this.listTop));
     }
 
-    /** Builds the flattened row list (headers/notes/cards) and the per-card thumbnail widgets. */
+    /** Builds the flattened row list (headers/notes/cards) and the per-card thumbnail widgets for the current mode. */
     private void opp$buildRows() {
+        this.rows.clear();
+        this.cardWidgets.clear();
+
+        if (this.mode == Mode.SKINS) {
+            this.opp$buildSkinRows();
+        } else {
+            this.opp$buildCapeRows();
+        }
+    }
+
+    private void opp$buildSkinRows() {
         List<CardEntry> yourSkins = new ArrayList<>();
         for (OppSkinHistory.Entry entry : OppSkinHistory.getAll()) {
             CardEntry card = new CardEntry(entry.hash(), entry.displayName(), entry.slim(), () -> OppSkinHistory.getBytes(entry.hash()));
@@ -252,11 +308,69 @@ public class WardrobeScreen extends Screen {
         }
     }
 
+    private void opp$buildCapeRows() {
+        List<CardEntry> yourCape = new ArrayList<>();
+        if (OppSkinManager.hasCape()) {
+            yourCape.add(new CardEntry("__your_cape__", "Custom Cape", false, OppSkinManager::getCapeBytes));
+        }
+
+        List<CardEntry> preloaded = new ArrayList<>();
+        for (OppPresetCapes.Preset preset : OppPresetCapes.all()) {
+            CardEntry card = new CardEntry(preset.id(), preset.displayName(), false, () -> OppPresetCapes.getBytes(preset));
+            if (card.bytesSupplier().get() != null) {
+                preloaded.add(card);
+            }
+        }
+
+        this.rows.add(Row.header("Your Cape"));
+        if (yourCape.isEmpty()) {
+            this.rows.add(Row.note("No custom cape loaded yet - use the Custom Skin / Cape Editor to add one."));
+        } else {
+            for (CardEntry card : yourCape) {
+                this.rows.add(Row.card(card));
+            }
+        }
+
+        this.rows.add(Row.header("Preloaded Capes"));
+        if (preloaded.isEmpty()) {
+            this.rows.add(Row.note("No preloaded capes yet - check back soon!"));
+        } else {
+            for (CardEntry card : preloaded) {
+                this.rows.add(Row.card(card));
+            }
+        }
+
+        for (Row row : this.rows) {
+            if (row.kind() != Row.Kind.CARD) {
+                continue;
+            }
+            CardEntry entry = row.card();
+            SkinTextures textures = this.opp$buildCapeCardTexture(entry.key(), entry.bytesSupplier().get());
+            if (textures != null) {
+                PlayerSkinWidget widget = new PlayerSkinWidget(THUMB_W, THUMB_H, MinecraftClient.getInstance().getLoadedEntityModels(), () -> textures);
+                this.cardWidgets.put(entry.key(), widget);
+            }
+        }
+    }
+
     private void opp$applyCard(CardEntry entry) {
         byte[] bytes = entry.bytesSupplier().get();
         if (bytes == null) {
             this.statusMessage = "Couldn't load \"" + entry.displayName() + "\" - resource missing.";
             this.statusIsError = true;
+            return;
+        }
+
+        if (this.mode == Mode.CAPES) {
+            String error = OppSkinManager.trySetCapeBytes(bytes);
+            if (error == null) {
+                this.statusMessage = "Wearing \"" + entry.displayName() + "\" cape.";
+                this.statusIsError = false;
+                this.opp$rebuildPreviewTexture(OppSkinManager.getSkinBytes(), OppSkinManager.getCapeBytes());
+            } else {
+                this.statusMessage = error;
+                this.statusIsError = true;
+            }
             return;
         }
 
@@ -359,6 +473,72 @@ public class WardrobeScreen extends Screen {
         AssetInfo.TextureAsset body = new AssetInfo.TextureAssetInfo(assetId);
 
         return SkinTextures.create(body, null, null, slim ? PlayerSkinType.SLIM : PlayerSkinType.WIDE);
+    }
+
+    /**
+     * Decodes and registers a cape card's PNG, then builds SkinTextures
+     * pairing it with a shared neutral "Steve" body (registered once and
+     * reused across every cape card) so the cape itself is what stands out
+     * in the thumbnail. Returns null if the cape PNG or the fallback body
+     * can't be loaded, in which case the caller skips that card.
+     */
+    private SkinTextures opp$buildCapeCardTexture(String key, byte[] capePngBytes) {
+        if (capePngBytes == null) {
+            return null;
+        }
+
+        NativeImage capeImage;
+        try {
+            capeImage = NativeImage.read(capePngBytes);
+        } catch (IOException e) {
+            return null;
+        }
+
+        AssetInfo.TextureAsset body = this.opp$capeThumbBodyAsset();
+        if (body == null) {
+            return null;
+        }
+
+        MinecraftClient client = MinecraftClient.getInstance();
+        Identifier capeAssetId = Identifier.of("opp", "wardrobe_cape_card/" + key);
+        Identifier capeTextureId = capeAssetId.withPath(path -> "textures/" + path + ".png");
+        client.getTextureManager().registerTexture(capeTextureId, new NativeImageBackedTexture(() -> "opp wardrobe cape card " + key, capeImage));
+        AssetInfo.TextureAsset cape = new AssetInfo.TextureAssetInfo(capeAssetId);
+
+        return SkinTextures.create(body, cape, null, PlayerSkinType.WIDE);
+    }
+
+    /**
+     * Registers (once per screen instance) the neutral "Steve" body every
+     * cape-card thumbnail wears, reusing OppPresetSkins' bundled steve.png
+     * rather than shipping a separate dedicated asset for it.
+     */
+    private AssetInfo.TextureAsset opp$capeThumbBodyAsset() {
+        if (!this.capeThumbBodyRegistered) {
+            byte[] steveBytes = null;
+            for (OppPresetSkins.Preset preset : OppPresetSkins.all()) {
+                if (preset.id().equals("steve")) {
+                    steveBytes = OppPresetSkins.getBytes(preset);
+                    break;
+                }
+            }
+            if (steveBytes == null) {
+                return null;
+            }
+
+            NativeImage image;
+            try {
+                image = NativeImage.read(steveBytes);
+            } catch (IOException e) {
+                return null;
+            }
+
+            Identifier textureId = CAPE_THUMB_BODY_ASSET_ID.withPath(path -> "textures/" + path + ".png");
+            MinecraftClient.getInstance().getTextureManager().registerTexture(textureId, new NativeImageBackedTexture(() -> "opp wardrobe cape thumb body", image));
+            this.capeThumbBodyRegistered = true;
+        }
+
+        return new AssetInfo.TextureAssetInfo(CAPE_THUMB_BODY_ASSET_ID);
     }
 
     private SkinTextures opp$currentPreviewSkin() {
