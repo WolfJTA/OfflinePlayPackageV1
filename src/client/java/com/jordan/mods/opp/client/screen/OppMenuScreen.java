@@ -6,9 +6,10 @@ import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.text.Text;
 
 /**
- * Small hub screen for OfflinePlayPackage - links out to the tutorial and
- * the offline skin screen. Used as the Mod Menu config screen, and reused
- * as the target of the title-screen/options-screen shortcut buttons.
+ * Small hub screen for OfflinePlayPackage - links out to the tutorial, the
+ * wardrobe (preset skins + cape shortcuts), and the full custom skin/cape
+ * editor. Used as the Mod Menu config screen, and reused as the target of
+ * the title-screen/options-screen shortcut buttons.
  */
 public class OppMenuScreen extends Screen {
 
@@ -25,7 +26,7 @@ public class OppMenuScreen extends Screen {
 
         int buttonWidth = 200;
         int x = (this.width - buttonWidth) / 2;
-        int y = this.height / 2 - 30;
+        int y = this.height / 2 - 43;
 
         this.addDrawableChild(
                 ButtonWidget.builder(Text.literal("Tutorial"), button -> this.client.setScreen(new OfflineTutorialScreen(this)))
@@ -33,8 +34,13 @@ public class OppMenuScreen extends Screen {
         );
 
         this.addDrawableChild(
-                ButtonWidget.builder(Text.literal("Offline Skin"), button -> this.client.setScreen(new OppSkinScreen(this)))
+                ButtonWidget.builder(Text.literal("Wardrobe"), button -> this.client.setScreen(new WardrobeScreen(this)))
                         .dimensions(x, y + 26, buttonWidth, 20).build()
+        );
+
+        this.addDrawableChild(
+                ButtonWidget.builder(Text.literal("Custom Skin / Cape Editor"), button -> this.client.setScreen(new OppSkinScreen(this)))
+                        .dimensions(x, y + 52, buttonWidth, 20).build()
         );
 
         this.addDrawableChild(
@@ -46,7 +52,7 @@ public class OppMenuScreen extends Screen {
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         super.render(context, mouseX, mouseY, delta);
-        context.drawCenteredTextWithShadow(this.textRenderer, this.title, this.width / 2, this.height / 2 - 60, 0xFFFFFFFF);
+        context.drawCenteredTextWithShadow(this.textRenderer, this.title, this.width / 2, this.height / 2 - 73, 0xFFFFFFFF);
     }
 
     @Override

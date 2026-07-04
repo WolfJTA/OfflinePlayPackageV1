@@ -15,11 +15,11 @@ import java.util.UUID;
 import java.util.concurrent.Executors;
 
 /**
- * A tiny HTTP server that serves stored offline skins as plain PNGs, so
- * they can be referenced by URL from a player's GameProfile "textures"
- * property. This is what makes skins visible to vanilla (non-modded)
- * clients too - they read that property the same way they'd read a real
- * Mojang-hosted skin URL, no mod required on their end.
+ * A tiny HTTP server that serves stored offline skins (and capes) as plain
+ * PNGs, so they can be referenced by URL from a player's GameProfile
+ * "textures" property. This is what makes skins/capes visible to vanilla
+ * (non-modded) clients too - they read that property the same way they'd
+ * read a real Mojang-hosted skin/cape URL, no mod required on their end.
  *
  * Binds to an OS-assigned free port on all interfaces (0.0.0.0) so it
  * never collides with the game's own port, then figures out the LAN IP
@@ -41,7 +41,8 @@ public final class OppSkinHttpServer {
                 t.setDaemon(true);
                 return t;
             }));
-            server.createContext("/skins/", OppSkinHttpServer::handle);
+            server.createContext("/skins/", exchange -> handle(exchange, false));
+            server.createContext("/capes/", exchange -> handle(exchange, true));
             server.start();
             port = server.getAddress().getPort();
             host = findLocalIp();
@@ -69,7 +70,15 @@ public final class OppSkinHttpServer {
         return "http://" + host + ":" + port + "/skins/" + uuid + ".png";
     }
 
-    private static void handle(HttpExchange exchange) throws IOException {
+    /** Full URL for a player's cape, or null if the server isn't up / no LAN IP was found. */
+    public static String buildCapeUrl(UUID uuid) {
+        if (server == null || host == null) {
+            return null;
+        }
+        return "http://" + host + ":" + port + "/capes/" + uuid + ".png";
+    }
+
+    private static void handle(HttpExchange exchange, boolean isCape) throws IOException {
         try {
             String path = exchange.getRequestURI().getPath();
             String fileName = path.substring(path.lastIndexOf('/') + 1);
@@ -86,7 +95,7 @@ public final class OppSkinHttpServer {
                 return;
             }
 
-            byte[] png = ServerSkinManager.getSkin(uuid);
+            byte[] png = isCape ? ServerSkinManager.getCape(uuid) : ServerSkinManager.getSkin(uuid);
             if (png == null) {
                 exchange.sendResponseHeaders(404, -1);
                 return;

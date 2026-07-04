@@ -71,7 +71,7 @@ public class OfflineTutorialScreen extends Screen {
     }
 
     private static Text opp$offlineSkinTooltip() {
-        return Text.literal("Set a custom skin PNG to use while playing offline. Everyone else connected to your LAN world, modded or vanilla, will see it too.");
+        return Text.literal("Set a custom skin PNG to use while playing offline. Everyone with the mod will see the skin, but sadly vanilla clients wont.");
     }
 
     @Override

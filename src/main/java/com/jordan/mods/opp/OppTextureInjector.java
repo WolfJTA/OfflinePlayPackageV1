@@ -16,32 +16,49 @@ import java.util.Base64;
 
 /**
  * Writes an unsigned "textures" property into a player's live GameProfile
- * pointing at our HTTP server. Vanilla clients read this the same way
- * they'd read a real Mojang-hosted skin URL - no mod required on their end.
+ * pointing at our HTTP server (skin, and cape if they have one). Vanilla
+ * clients read this the same way they'd read a real Mojang-hosted skin/cape
+ * URL - no mod required on their end.
  *
  * KNOWN LIMITATION: this only takes effect for clients that connect (or
  * reconnect) after the property is set. Minecraft has no built-in "skin
  * changed" packet, so players already connected when someone sets/changes
- * their skin won't see it update live - they'd need to rejoin. Revisit this
- * with verified PlayerListS2CPacket internals if instant updates matter.
+ * their skin or cape won't see it update live - they'd need to rejoin.
+ * Revisit this with verified PlayerListS2CPacket internals if instant
+ * updates matter.
  */
 public final class OppTextureInjector {
 
     private OppTextureInjector() {}
 
     public static void apply(ServerPlayerEntity player, boolean slim) {
-        String url = OppSkinHttpServer.buildSkinUrl(player.getUuid());
-        if (url == null) {
+        apply(player, slim, ServerSkinManager.hasSkin(player.getUuid())
+                && ServerSkinManager.getCape(player.getUuid()) != null);
+    }
+
+    public static void apply(ServerPlayerEntity player, boolean slim, boolean hasCape) {
+        String skinUrl = OppSkinHttpServer.buildSkinUrl(player.getUuid());
+        if (skinUrl == null) {
             return; // HTTP server isn't up (e.g. no LAN IP found)
         }
+
+        String capeUrl = hasCape ? OppSkinHttpServer.buildCapeUrl(player.getUuid()) : null;
+
+        StringBuilder textures = new StringBuilder();
+        textures.append("{\"SKIN\":{\"url\":\"").append(skinUrl).append("\"")
+                .append(slim ? ",\"metadata\":{\"model\":\"slim\"}" : "")
+                .append("}");
+        if (capeUrl != null) {
+            textures.append(",\"CAPE\":{\"url\":\"").append(capeUrl).append("\"}");
+        }
+        textures.append("}");
 
         String json = "{"
                 + "\"timestamp\":" + System.currentTimeMillis() + ","
                 + "\"profileId\":\"" + player.getUuid().toString().replace("-", "") + "\","
                 + "\"profileName\":\"" + player.getGameProfile().name() + "\","
-                + "\"textures\":{\"SKIN\":{\"url\":\"" + url + "\""
-                + (slim ? ",\"metadata\":{\"model\":\"slim\"}" : "")
-                + "}}}";
+                + "\"textures\":" + textures
+                + "}";
 
         String encoded = Base64.getEncoder().encodeToString(json.getBytes(StandardCharsets.UTF_8));
 

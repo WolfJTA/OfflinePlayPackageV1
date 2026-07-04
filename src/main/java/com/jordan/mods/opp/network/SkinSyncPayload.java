@@ -7,9 +7,13 @@ import net.minecraft.network.packet.CustomPayload;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.Uuids;
 
+import java.util.Optional;
 import java.util.UUID;
 
-public record SkinSyncPayload(UUID playerId, byte[] skinPng, boolean slim) implements CustomPayload {
+/**
+ * Server -> client. capePng is empty when that player has no cape set.
+ */
+public record SkinSyncPayload(UUID playerId, byte[] skinPng, boolean slim, Optional<byte[]> capePng) implements CustomPayload {
     public static final CustomPayload.Id<SkinSyncPayload> ID =
             new CustomPayload.Id<>(Identifier.of("opp", "skin_sync"));
 
@@ -18,6 +22,7 @@ public record SkinSyncPayload(UUID playerId, byte[] skinPng, boolean slim) imple
                     Uuids.PACKET_CODEC, SkinSyncPayload::playerId,
                     PacketCodecs.byteArray(1 << 20), SkinSyncPayload::skinPng,
                     PacketCodecs.BOOLEAN, SkinSyncPayload::slim,
+                    PacketCodecs.optional(PacketCodecs.byteArray(1 << 20)), SkinSyncPayload::capePng,
                     SkinSyncPayload::new
             );
 

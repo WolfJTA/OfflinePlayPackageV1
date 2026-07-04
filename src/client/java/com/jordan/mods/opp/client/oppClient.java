@@ -11,6 +11,8 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
 
+import java.util.Optional;
+
 public class oppClient implements ClientModInitializer {
 
     @Override
@@ -25,12 +27,12 @@ public class oppClient implements ClientModInitializer {
                 }))
         );
 
-        // Single JOIN listener: send our skin (and arm model) to the server,
-        // and apply it locally right away rather than waiting on the server
-        // to echo it back - this is what guarantees the host sees their own
-        // skin instantly. (Previously this logic was duplicated across two
-        // separate JOIN registrations, which sent the upload packet twice
-        // on every join.)
+        // Single JOIN listener: send our skin (+ cape, if set) and arm model
+        // to the server, and apply it locally right away rather than
+        // waiting on the server to echo it back - this is what guarantees
+        // the host sees their own skin instantly. (Previously this logic
+        // was duplicated across two separate JOIN registrations, which sent
+        // the upload packet twice on every join.)
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
             byte[] skin = OppSkinManager.getSkinBytes();
             if (skin == null) {
@@ -38,9 +40,11 @@ public class oppClient implements ClientModInitializer {
             }
 
             boolean slim = OppSkinManager.isSlimModel();
+            byte[] cape = OppSkinManager.getCapeBytes();
+            Optional<byte[]> capeOpt = cape != null ? Optional.of(cape) : Optional.empty();
 
             if (ClientPlayNetworking.canSend(SkinUploadPayload.ID)) {
-                sender.sendPacket(new SkinUploadPayload(skin, slim));
+                sender.sendPacket(new SkinUploadPayload(skin, slim, capeOpt));
             }
 
             // Use the local player entity's UUID (the one the server actually
@@ -54,13 +58,14 @@ public class oppClient implements ClientModInitializer {
             client.execute(() -> {
                 ClientPlayerEntity self = client.player;
                 if (self != null) {
-                    OppRemoteSkinCache.apply(self.getUuid(), skin, slim);
+                    OppRemoteSkinCache.apply(self.getUuid(), skin, slim, cape);
                 }
             });
         });
 
         ClientPlayNetworking.registerGlobalReceiver(SkinSyncPayload.ID, (payload, context) ->
-                context.client().execute(() -> OppRemoteSkinCache.apply(payload.playerId(), payload.skinPng(), payload.slim()))
+                context.client().execute(() -> OppRemoteSkinCache.apply(
+                        payload.playerId(), payload.skinPng(), payload.slim(), payload.capePng().orElse(null)))
         );
     }
 }

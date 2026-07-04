@@ -15,15 +15,20 @@ import java.nio.file.Path;
  * skin PNG) and persists it to disk so it's remembered between sessions.
  * Also tracks the arm/model type (slim "Alex" vs classic "Steve") since
  * that isn't something we can reliably detect from the PNG itself.
+ *
+ * Also stores an optional cape PNG (64x32) the same way - entirely
+ * separate from the skin, so clearing/changing one never touches the other.
  */
 public final class OppSkinManager {
 
     private static final Path CONFIG_DIR = FabricLoader.getInstance().getConfigDir().resolve("opp_v1");
     private static final Path SKIN_FILE = CONFIG_DIR.resolve("offline_skin.png");
     private static final Path MODEL_FILE = CONFIG_DIR.resolve("offline_skin_model.txt");
+    private static final Path CAPE_FILE = CONFIG_DIR.resolve("offline_cape.png");
 
     private static byte[] skinBytes = null;
     private static boolean slimModel = false;
+    private static byte[] capeBytes = null;
 
     private OppSkinManager() {
     }
@@ -45,6 +50,14 @@ public final class OppSkinManager {
         } catch (IOException e) {
             slimModel = false;
         }
+
+        try {
+            if (Files.exists(CAPE_FILE)) {
+                capeBytes = Files.readAllBytes(CAPE_FILE);
+            }
+        } catch (IOException e) {
+            capeBytes = null;
+        }
     }
 
     public static boolean hasCustomSkin() {
@@ -57,6 +70,14 @@ public final class OppSkinManager {
 
     public static boolean isSlimModel() {
         return slimModel;
+    }
+
+    public static boolean hasCape() {
+        return capeBytes != null;
+    }
+
+    public static byte[] getCapeBytes() {
+        return capeBytes;
     }
 
     /**
@@ -99,6 +120,23 @@ public final class OppSkinManager {
             return "Could not read that file.";
         }
 
+        return trySetSkinBytes(bytes);
+    }
+
+    /**
+     * Same validation/persistence as {@link #trySetSkin(String)}, but takes
+     * the PNG bytes directly instead of a file path. Used both by the file
+     * path/browse flow (after reading the file) and by the wardrobe's
+     * bundled preset skins, which are read from mod resources rather than
+     * an arbitrary path on disk.
+     *
+     * @return null on success, or a human-readable error message on failure.
+     */
+    public static String trySetSkinBytes(byte[] bytes) {
+        if (bytes == null) {
+            return "No skin data given.";
+        }
+
         BufferedImage image;
         try {
             image = ImageIO.read(new ByteArrayInputStream(bytes));
@@ -133,6 +171,82 @@ public final class OppSkinManager {
         try {
             Files.deleteIfExists(SKIN_FILE);
             Files.deleteIfExists(MODEL_FILE);
+        } catch (IOException ignored) {
+        }
+    }
+
+    /**
+     * Attempts to load a PNG from the given absolute path as a cape (64x32).
+     *
+     * @return null on success, or a human-readable error message on failure.
+     */
+    public static String trySetCape(String rawPath) {
+        Path source;
+        try {
+            source = Path.of(rawPath.trim().replace("\"", ""));
+        } catch (Exception e) {
+            return "That doesn't look like a valid file path.";
+        }
+
+        if (!Files.exists(source)) {
+            return "File not found.";
+        }
+
+        byte[] bytes;
+        try {
+            bytes = Files.readAllBytes(source);
+        } catch (IOException e) {
+            return "Could not read that file.";
+        }
+
+        return trySetCapeBytes(bytes);
+    }
+
+    /**
+     * Same as {@link #trySetCape(String)} but takes PNG bytes directly -
+     * used by the wardrobe's bundled preset cape(s).
+     *
+     * @return null on success, or a human-readable error message on failure.
+     */
+    public static String trySetCapeBytes(byte[] bytes) {
+        if (bytes == null) {
+            return "No cape data given.";
+        }
+
+        BufferedImage image;
+        try {
+            image = ImageIO.read(new ByteArrayInputStream(bytes));
+        } catch (IOException e) {
+            image = null;
+        }
+
+        if (image == null) {
+            return "That doesn't look like a valid PNG.";
+        }
+
+        int width = image.getWidth();
+        int height = image.getHeight();
+        // Capes are traditionally 64x32, but Mojang's newer "double height"
+        // cape sheets (64x64) exist too, so accept both.
+        if (width != 64 || (height != 32 && height != 64)) {
+            return "Cape image must be 64x32 - got " + width + "x" + height + ".";
+        }
+
+        try {
+            Files.createDirectories(CONFIG_DIR);
+            Files.write(CAPE_FILE, bytes);
+        } catch (IOException e) {
+            return "Could not save the cape file.";
+        }
+
+        capeBytes = bytes;
+        return null;
+    }
+
+    public static void clearCape() {
+        capeBytes = null;
+        try {
+            Files.deleteIfExists(CAPE_FILE);
         } catch (IOException ignored) {
         }
     }
