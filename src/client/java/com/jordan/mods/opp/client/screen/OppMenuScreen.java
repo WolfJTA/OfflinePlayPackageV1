@@ -6,10 +6,10 @@ import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.text.Text;
 
 /**
- * Small hub screen for OfflinePlayPackage - links out to the tutorial, the
- * wardrobe (preset skins + cape shortcuts), and the full custom skin/cape
- * editor. Used as the Mod Menu config screen, and reused as the target of
- * the title-screen/options-screen shortcut buttons.
+ * Small hub screen for OfflinePlayPackage - links out to the tutorial and
+ * the offline skins/capes editor (which itself links onward to the
+ * Wardrobe). Used as the Mod Menu config screen, and reused as the target
+ * of the title-screen/options-screen shortcut buttons.
  */
 public class OppMenuScreen extends Screen {
 
@@ -26,7 +26,7 @@ public class OppMenuScreen extends Screen {
 
         int buttonWidth = 200;
         int x = (this.width - buttonWidth) / 2;
-        int y = this.height / 2 - 43;
+        int y = this.height / 2 - 30;
 
         this.addDrawableChild(
                 ButtonWidget.builder(Text.literal("Tutorial"), button -> this.client.setScreen(new OfflineTutorialScreen(this)))
@@ -34,13 +34,8 @@ public class OppMenuScreen extends Screen {
         );
 
         this.addDrawableChild(
-                ButtonWidget.builder(Text.literal("Wardrobe"), button -> this.client.setScreen(new WardrobeScreen(this)))
+                ButtonWidget.builder(Text.literal("Offline Skins/Capes"), button -> this.client.setScreen(new OppSkinScreen(this)))
                         .dimensions(x, y + 26, buttonWidth, 20).build()
-        );
-
-        this.addDrawableChild(
-                ButtonWidget.builder(Text.literal("Custom Skin / Cape Editor"), button -> this.client.setScreen(new OppSkinScreen(this)))
-                        .dimensions(x, y + 52, buttonWidth, 20).build()
         );
 
         this.addDrawableChild(

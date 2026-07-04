@@ -1,5 +1,6 @@
 package com.jordan.mods.opp.client.screen;
 
+import net.minecraft.client.util.DefaultSkinHelper;
 import com.jordan.mods.opp.client.OppPresetSkins;
 import com.jordan.mods.opp.client.OppSkinHistory;
 import com.jordan.mods.opp.client.OppSkinManager;
@@ -169,7 +170,7 @@ public class WardrobeScreen extends Screen {
 
         int editorWidth = 220;
         this.addDrawableChild(
-                ButtonWidget.builder(Text.literal("Custom Skin / Cape Editor..."), button -> this.client.setScreen(new OppSkinScreen(this.parent)))
+                ButtonWidget.builder(Text.literal("Offline Skins/Capes..."), button -> this.client.setScreen(new OppSkinScreen(this.parent)))
                         .dimensions((this.width - editorWidth) / 2, editorY, editorWidth, 20).build()
         );
 
@@ -364,8 +365,17 @@ public class WardrobeScreen extends Screen {
         if (this.previewSkinTextures != null) {
             return this.previewSkinTextures;
         }
-        AbstractClientPlayerEntity player = MinecraftClient.getInstance().player;
-        return player != null ? player.getSkin() : null;
+
+        MinecraftClient client = MinecraftClient.getInstance();
+        AbstractClientPlayerEntity player = client.player;
+
+        // If we're in-game, use the actual player's skin
+        if (player != null) {
+            return player.getSkin();
+        }
+
+        // Fallback for the Main Menu: Generate a default skin using the session UUID
+        return DefaultSkinHelper.getSkinTextures(client.getSession().getUuidOrNull());
     }
 
     @Override
